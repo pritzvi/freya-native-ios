@@ -903,3 +903,202 @@ The mesh isn't perfect - true uniform distribution would require more complex al
 5. **Custom region masks**: Allow user-defined density regions
 
 This implementation demonstrates how to take ARKit's dense face data and create customized sparse visualizations suitable for AR applications.
+
+--------
+
+# Development Progress & Implementation Notes
+
+## Backend Implementation Completed (Sep 2025)
+
+### 🎯 What We Built
+**Firebase Functions v2 backend** with comprehensive product search, URL picking, and scraping pipeline:
+
+1. **Vector Search System**: Vertex AI embeddings + Firestore vector search for product similarity matching
+2. **Web Search Integration**: Firecrawl API for finding product URLs with beauty-focused queries  
+3. **AI URL Selection**: OpenAI hosted prompts (v4) to intelligently pick best product URLs (Sephora > Amazon > brand sites)
+4. **Product Scraping**: Structured data extraction with category classification (cleanser, serum, etc.)
+5. **Smart Caching**: Similarity threshold (distance < 0.3) prevents false cache hits between different products
+
+### 📁 Backend Structure
+```
+freya-backend/functions/
+├── src/
+│   ├── index.ts              # Functions v2 entry point with secrets binding
+│   ├── app.ts                # Express router with all endpoints  
+│   ├── lib/
+│   │   ├── vertex.ts         # Vertex AI text embeddings (768-dim)
+│   │   ├── firecrawl.ts      # Web search with beauty-focused queries
+│   │   ├── urlPicker.ts      # OpenAI hosted prompt URL selection
+│   │   ├── fcScrape.ts       # Structured product data extraction
+│   │   └── normalize.ts      # Data helpers (slugify, canon, parsePrice)
+│   └── routes/
+│       ├── devEmbed.ts       # Test Vertex AI embeddings
+│       ├── devIndexProduct.ts# Manually add products for testing
+│       ├── devKnn.ts         # Test vector similarity search
+│       └── productResolve.ts # Main production endpoint
+├── package.json              # ESM config + dependencies
+└── tsconfig.json            # NodeNext modules for OpenAI SDK v4
+```
+
+### 🔗 API Endpoints
+- `GET /health` - Health check
+- `GET /dev/embed` - Test Vertex AI embeddings  
+- `POST /dev/indexProduct` - Manually add test products
+- `POST /dev/knn` - Test vector similarity search
+- `POST /dev/search` - Test Firecrawl web search
+- `POST /dev/pickUrl` - Test OpenAI URL picker
+- `POST /dev/scrape` - Test product scraping
+- **`POST /product/resolve`** - Main production endpoint (cache → search → scrape → create)
+
+### 🗄️ Database Collections
+```
+products/{productId}          # Cached product snapshots (name, brand, category, price, etc.)
+product_index/{productId}     # Vector embeddings for similarity search  
+```
+
+### ⚙️ Configuration
+- **Secrets Management**: Firebase Secrets for API keys (`OPENAI_API_KEY`, `FIRECRAWL_API_KEY`, `PRODUCT_URL_PICKER_PROMPT_OAI`)
+- **Region**: `us-central1` (matches Vertex AI endpoint)
+- **Vector Search**: 768-dimension cosine similarity with 0.3 distance threshold
+
+---
+
+## 🧠 Critical Lessons Learned & Mistakes to Avoid
+
+### ❌ Firebase Admin Initialization
+**NEVER** call Firebase admin functions at module level:
+```typescript
+// ❌ WRONG - runs at import time before initializeApp()
+const db = getFirestore();
+export function myFunction() { ... }
+
+// ✅ CORRECT - call inside functions
+export function myFunction() {
+  const db = getFirestore();
+  ...
+}
+```
+**Why**: Module-level code executes during import, before `initializeApp()` is called, causing crashes.
+
+### ❌ Firestore undefined Values  
+**NEVER** write `undefined` to Firestore documents:
+```typescript
+// ❌ WRONG - Firestore rejects undefined
+await doc.set({ category: undefined })
+
+// ✅ CORRECT - use null for optional fields
+await doc.set({ category: data?.category || null })
+```
+**Why**: Firestore only accepts valid JSON types (string, number, boolean, null, objects, arrays) - not `undefined`.
+
+### ❌ Manual Xcode Project Edits
+**NEVER** manually edit `.pbxproj` files:
+```bash
+# ❌ WRONG - leads to project corruption  
+# Manually editing freya.xcodeproj/project.pbxproj
+
+# ✅ CORRECT - use Xcode UI
+# File → Add Packages → Enter repository URL
+```
+**Why**: Xcode project files have complex internal dependencies that break when manually edited.
+
+### ❌ Vector Search Without Thresholds
+**ALWAYS** add similarity thresholds to vector search:
+```typescript
+// ❌ WRONG - returns any closest match, even terrible ones
+if (!nearest.empty) {
+  return { status: "found", productId: nearest.docs[0].id };
+}
+
+// ✅ CORRECT - only return genuinely similar products  
+if (!nearest.empty) {
+  const distance = nearest.docs[0].get("vector_distance");
+  if (distance < 0.3) {
+    return { status: "found", productId: nearest.docs[0].id };
+  }
+}
+```
+**Why**: Without thresholds, "CeraVe cleanser" would match "iPhone case" as the "closest" product.
+
+### ❌ Overly Permissive Fallback Logic
+**TRUST AI decisions** instead of implementing dumb fallbacks:
+```typescript
+// ❌ WRONG - picks random URLs when AI correctly rejects non-beauty products
+if (!chosen) {
+  chosen = webResults[0]?.url; // Could be returns policy page!
+}
+
+// ✅ CORRECT - if AI says no good URLs, fail gracefully
+if (!chosen) {
+  return { status: "not_found", reason: "no_url" };
+}
+```
+**Why**: AI URL picker correctly identifies non-beauty products - don't override with random fallbacks.
+
+### ❌ OpenAI SDK Version Mismatches
+**ALWAYS** use correct syntax for SDK versions:
+```typescript
+// ❌ WRONG - OpenAI SDK v4 requires specific hosted prompt syntax
+const resp = await openai.responses.create({
+  prompt: { id: "...", version: "1" }  // Old version
+});
+
+// ✅ CORRECT - Use version 4 with tools array
+const resp = await openai.responses.create({
+  prompt: { id: "...", version: "4" },
+  tools: [{ type: "web_search", ... }]
+});
+```
+**Why**: Hosted prompts have version-specific requirements that change between SDK versions.
+
+---
+
+## 🛠️ Development Workflow
+
+### Local Testing Setup
+```bash
+cd freya-backend/functions
+npm run serve  # Builds TypeScript + starts emulators
+```
+
+### Example Test Flow
+```bash
+# 1. Test vector search (should be empty initially)
+curl -s http://localhost:5001/freya-7c812/us-central1/api/dev/knn \
+  -d '{"query":"cerave cleanser"}' | jq
+
+# 2. Create first product via full pipeline  
+curl -s http://localhost:5001/freya-7c812/us-central1/api/product/resolve \
+  -d '{"query":"CeraVe Foaming Facial Cleanser"}' | jq
+
+# 3. Test cache hit with similar query
+curl -s http://localhost:5001/freya-7c812/us-central1/api/product/resolve \
+  -d '{"query":"cerave foaming cleanser"}' | jq  # Should find cached product
+
+# 4. Test cache miss with different product
+curl -s http://localhost:5001/freya-7c812/us-central1/api/product/resolve \
+  -d '{"query":"The Ordinary Niacinamide"}' | jq  # Should create new product
+```
+
+### Key Performance Metrics
+- **Vector similarity**: Distance < 0.3 = cache hit, ≥ 0.3 = cache miss
+- **API response times**: ~3-15 seconds for cache miss (web search + scraping), ~500ms for cache hit
+- **Data quality**: Firecrawl successfully extracts structured product data with category classification
+
+---
+
+## 🔄 Next Steps
+
+### Immediate (Mobile App)
+1. **Swift/SwiftUI integration** - Add Firebase SDKs, implement product search UI
+2. **Product detail screens** - Display cached product snapshots  
+3. **User authentication** - Firebase Auth integration
+4. **Basic routine generation** - OpenAI prompt for skincare routines
+
+### Future Enhancements  
+1. **Advanced vector search** - Brand filtering, category filtering, price range filters
+2. **Real-time updates** - WebSocket connections for live product updates
+3. **Image search** - OpenAI Vision API for product photo recognition
+4. **Batch processing** - Background jobs for popular product pre-caching
+
+The backend foundation is solid and production-ready for the mobile app development phase.

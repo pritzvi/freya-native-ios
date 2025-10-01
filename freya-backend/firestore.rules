@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global product snapshots (read-only from clients)
+    match /products/{productId} {
+      allow read: if true;              // or: request.auth != null
+      allow write: if false;            // only server (Admin SDK) writes
+    }
+
+    // User-specific match results: productMatches/{uid}/items/{productId}
+    match /productMatches/{uid}/items/{productId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // (Optional) User's ownership/like flags
+    match /userProducts/{uid}/{productId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}

@@ -1,14 +1,34 @@
+# macOS
+.DS_Store
+
 # Xcode user data
 xcuserdata/
 *.xcuserstate
 
-# macOS
-.DS_Store
+# Build folders
+build/
+DerivedData/
 
 # Swift Package Manager
 .swiftpm/
 Package.resolved
 
-# Build folders
-build/
-DerivedData/
+# CocoaPods (ignore if not used)
+Pods/
+
+# Node / JS (ignore everywhere)
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env files (ignore everywhere; keep sample)
+.env
+.env.*
+!.env.example
+
+# Firebase (backend/emulators)
+.firebase/
+.emulator-cache/
+firebase-debug.log
+.firebaserc.local
