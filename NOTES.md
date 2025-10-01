@@ -72,8 +72,13 @@ Prod Notes
 
 - Need to speed this thing up to <10s 
 - for urlPicker, need to make sure OAI LLM does the search to confirm if its real
+- Use structured output, maybe zod
+- Cleanup code being in random places
 
 Next Steps:
+
+- Get the syntax down for adding secret, creating in lib, routes, and mounting in express app, then testing with simple curl and creating document/collections in emulator before running the curl
+
 - Product Fit Score function, this is specific to the user
 - Skincare Report generator
 - Routine generator

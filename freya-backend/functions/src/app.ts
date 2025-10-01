@@ -9,6 +9,7 @@ import { pickBestUrl } from "./lib/urlPicker.js";
 import { fcScrapeProduct } from "./lib/fcScrape.js";
 import { productResolve } from "./routes/productResolve.js";
 import { matchScore } from "./routes/matchScore.js";
+import { deepScanScoreRoute } from "./routes/deepScan.js";
 
 if (getApps().length === 0) {
   initializeApp();
@@ -58,3 +59,4 @@ app.post("/dev/scrape", async (req, res) => {
 // Main API
 app.post("/product/resolve", productResolve);
 app.post("/match/score", matchScore);
+app.post("/api/deepscan/score", deepScanScoreRoute);
