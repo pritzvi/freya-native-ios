@@ -71,9 +71,11 @@ Do some pre-processing to get brand from user query, prefilter by that and then 
 Prod Notes
 
 - Need to speed this thing up to <10s 
+- Skin Score alone takes 30s
 - for urlPicker, need to make sure OAI LLM does the search to confirm if its real
 - Use structured output, maybe zod
 - Cleanup code being in random places
+- Can use openbeautyfacts DB to filter for user needs first (like Vegan)
 
 Next Steps:
 
@@ -87,3 +89,9 @@ Next Steps:
 
 This is our product fit score output:
 {"status":"ok","productId":"cerave-cerave-hydrating-facial-cleanser","match":{"match_score":95,"match_level":"Great Match","overall_assessment":"CeraVe Hydrating Facial Cleanser could be a Great Match for you because it contains ceramides, hyaluronic acid, and glycerin, which are good for your dryness and help support your sensitive, combination skin. Its non-comedogenic, fragrance-free formula makes it especially suitable for acne-prone and reactive skin.","ingredient_analysis":{"GLYCERIN":{"status":"good","reason":"Hydrates and supports dryness and sensitive skin."},"CERAMIDE NP/AP/EOP":{"status":"good","reason":"Ceramides restore skin barrier, addressing dryness and sensitivity."},"SODIUM HYALURONATE":{"status":"good","reason":"Hydrating active, holds moisture, alleviates dryness."},"PHYTOSPHINGOSINE":{"status":"good","reason":"Supports skin barrier, reduces inflammation, good for acne."},"CETEARYL ALCOHOL":{"status":"neutral","reason":"Fatty alcohol, non-irritating, conditions skin, but not comedogenic."},"STEARYL ALCOHOL":{"status":"neutral","reason":"Fatty alcohol, emollient, non-comedogenic."},"PHENOXYETHANOL":{"status":"neutral","reason":"Preservative; generally well-tolerated, but can rarely cause irritation in the highly sensitive."},"ETHYLHEXYLGLYCERIN":{"status":"neutral","reason":"Mild preservative booster, generally non-irritating."},"PEG-40 STEARATE":{"status":"neutral","reason":"Emulsifier, not comedogenic or irritating."}},"specific_notes":["No fragrance detected; no allergen conflict for fragrance-sensitive users.","No flagged comedogenic ingredients—suitable for acne-prone skin.","Contains ceramides, glycerin, and hyaluronic acid, which directly address your dryness and barrier sensitivity.","Creamy, non-foaming formula is ideal for your combination, sensitive skin and won't strip moisture.","Product is listed as vegan and cruelty-free; aligns with your preferences."]},"product":{"name":"CeraVe Hydrating Facial Cleanser","brand":"CeraVe","category":"cleanser","image":"https://m.media-amazon.com/images/I/51DbQev1thL._SX425_.jpg"}}
+
+
+
+
+- Dont wanna waste CPU time from OpenAI, so do Async polling, and also reduce time, dont wanna spend more than 60s per product call, want it to be strictly <60s.
+- Finish the product filling into routine function

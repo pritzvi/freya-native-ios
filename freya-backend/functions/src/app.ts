@@ -10,6 +10,8 @@ import { fcScrapeProduct } from "./lib/fcScrape.js";
 import { productResolve } from "./routes/productResolve.js";
 import { matchScore } from "./routes/matchScore.js";
 import { deepScanScoreRoute } from "./routes/deepScan.js";
+import { saveSurvey } from "./routes/survey.js";
+import { generateReport, testProductFinder, findProductsForReport } from "./routes/report.js";
 
 if (getApps().length === 0) {
   initializeApp();
@@ -60,3 +62,7 @@ app.post("/dev/scrape", async (req, res) => {
 app.post("/product/resolve", productResolve);
 app.post("/match/score", matchScore);
 app.post("/api/deepscan/score", deepScanScoreRoute);
+app.post("/api/survey/save", saveSurvey);
+app.post("/api/report/generate", generateReport);
+app.post("/api/report/test-product-finder", testProductFinder); // Test endpoint for product finder
+app.post("/api/report/find-products", findProductsForReport); // Main parallel product finder

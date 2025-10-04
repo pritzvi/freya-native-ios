@@ -12,8 +12,10 @@ const firecrawlApiKey = defineSecret("FIRECRAWL_API_KEY");
 const productUrlPickerPromptOai = defineSecret("PRODUCT_URL_PICKER_PROMPT_OAI");
 const productFitScorePromptOai = defineSecret("PRODUCT_FIT_SCORE_PROMPT_OAI");
 const skinscorePromptOai = defineSecret("SKINSCORE_PROMPT_OAI");
+const skincareRoutineReportGeneratorPromptOai = defineSecret("SKINCAREROUTINE_REPORT_GENERATOR_PROMPT_OAI");
+const productFinderForRoutineFastPromptOai = defineSecret("PRODUCT_FINDER_FOR_ROUTINE_FAST_PROMPT_OAI");
 
 export const api = onRequest(
-  { secrets: [openaiApiKey, firecrawlApiKey, productUrlPickerPromptOai, productFitScorePromptOai, skinscorePromptOai] },
+  { secrets: [openaiApiKey, firecrawlApiKey, productUrlPickerPromptOai, productFitScorePromptOai, skinscorePromptOai, skincareRoutineReportGeneratorPromptOai, productFinderForRoutineFastPromptOai] },
   app
 );

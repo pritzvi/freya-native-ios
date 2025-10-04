@@ -1102,3 +1102,229 @@ curl -s http://localhost:5001/freya-7c812/us-central1/api/product/resolve \
 4. **Batch processing** - Background jobs for popular product pre-caching
 
 The backend foundation is solid and production-ready for the mobile app development phase.
+
+---
+
+# Backend Feature Development Playbook
+
+## 🎯 Standard Workflow for Firebase Functions + OpenAI Features
+
+This is the exact playbook used for implementing backend features that involve Firestore operations, OpenAI integration, and secret management.
+
+---
+
+## 🔧 **Step 1: Secrets Configuration**
+**File**: `src/index.ts`
+**Purpose**: Register new OpenAI prompt secrets with Firebase Functions
+
+**What to add:**
+```typescript
+// Define new secret
+const newPromptSecret = defineSecret("NEW_PROMPT_NAME_OAI");
+
+// Add to secrets array in onRequest
+{ secrets: [...existingSecrets, newPromptSecret] }
+```
+
+**Why this file**: Entry point for Firebase Functions - all secrets must be declared here to be accessible in runtime.
+
+---
+
+## 🔧 **Step 2: Core Library Function** 
+**File**: `src/lib/[featureName].ts` (e.g., `reportGenerator.ts`)
+**Purpose**: Encapsulate OpenAI integration logic
+
+**Standard structure:**
+```typescript
+import OpenAI from "openai";
+import { defineSecret } from "firebase-functions/params";
+
+// 1. Secret definitions
+const openaiApiKey = defineSecret("OPENAI_API_KEY");
+const featurePromptOai = defineSecret("FEATURE_PROMPT_OAI");
+
+// 2. Lazy client initialization
+let openaiClient: OpenAI | null = null;
+function getOpenAIClient(): OpenAI {
+  if (!openaiClient) {
+    openaiClient = new OpenAI({ apiKey: openaiApiKey.value() });
+  }
+  return openaiClient;
+}
+
+// 3. Interface for return type
+export interface FeatureResult {
+  // Define expected output structure
+}
+
+// 4. Main function
+export async function featureFunction(input: any): Promise<FeatureResult | null> {
+  const openai = getOpenAIClient();
+  
+  // 5. Prepare input text
+  const inputText = `INPUT DATA:\n${JSON.stringify(input, null, 2)}`;
+  
+  // 6. OpenAI call with standard pattern
+  const resp = await openai.responses.create({
+    prompt: { id: featurePromptOai.value(), version: "1" },
+    input: [{ role: "user", content: [{ type: "input_text", text: inputText }] }],
+    text: { "format": { "type": "text" } }
+  } as any);
+  
+  // 7. Robust JSON parsing (markdown-aware)
+  const output = (resp as any).output_text ?? "";
+  const jsonMatch = output.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  let jsonString = jsonMatch ? jsonMatch[1] : output;
+  jsonString = jsonString.trim();
+  
+  if (!jsonMatch) {
+    const startBrace = output.indexOf('{');
+    const lastBrace = output.lastIndexOf('}');
+    if (startBrace !== -1 && lastBrace !== -1) {
+      jsonString = output.substring(startBrace, lastBrace + 1);
+    }
+  }
+  
+  // 8. Parse and return
+  const parsed = JSON.parse(jsonString);
+  return { /* map parsed fields */ };
+}
+```
+
+**Why separate lib file**: Keeps OpenAI logic isolated, reusable, and testable independently of HTTP routes.
+
+---
+
+## 🔧 **Step 3: API Route Handler**
+**File**: `src/routes/[featureName].ts` (e.g., `report.ts`)
+**Purpose**: HTTP endpoint logic, Firestore operations, business logic
+
+**Standard structure:**
+```typescript
+import { Request, Response } from "express";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { featureFunction } from "../lib/featureName.js";
+
+function generateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
+export async function routeHandler(req: Request, res: Response) {
+  try {
+    // 1. Extract and validate input
+    const { uid, ...otherParams } = req.body || {};
+    if (!uid) return res.status(400).json({ error: "uid required" });
+    
+    const db = getFirestore();
+    console.log("Processing for user:", uid);
+    
+    // 2. Fetch required data from Firestore
+    const doc1 = await db.collection("collection1").doc(uid).get();
+    const doc2 = await db.collection("collection2").doc(uid).collection("items")
+      .orderBy("createdAt", "desc").limit(1).get();
+    
+    // 3. Validate data exists
+    if (!doc1.exists) return res.status(404).json({ error: "Required data not found" });
+    
+    // 4. Call core library function
+    const result = await featureFunction(combinedData);
+    if (!result) return res.status(500).json({ error: "Processing failed" });
+    
+    // 5. Store results in Firestore
+    const resultId = generateId();
+    await db.collection("results").doc(uid).collection("items").doc(resultId).set({
+      inputRef: uid,
+      resultData: result,
+      createdAt: FieldValue.serverTimestamp()
+    });
+    
+    // 6. Optional: Materialize derived data
+    if (result.derivedData) {
+      await db.collection("derived").doc(uid).set(result.derivedData, { merge: true });
+    }
+    
+    // 7. Return response
+    return res.json({ resultId, status: "success", data: result });
+    
+  } catch (error) {
+    console.error("Route error:", error);
+    return res.status(500).json({ error: error.message });
+  }
+}
+```
+
+**Why separate route file**: Separates HTTP concerns from business logic, handles Firestore operations, manages request/response flow.
+
+---
+
+## 🔧 **Step 4: Route Registration**
+**File**: `src/app.ts`
+**Purpose**: Mount new endpoint in Express router
+
+**What to add:**
+```typescript
+// 1. Import route handler
+import { routeHandler } from "./routes/featureName.js";
+
+// 2. Mount endpoint
+app.post("/api/feature/action", routeHandler);
+```
+
+**Why this file**: Central Express app configuration - all routes must be registered here to be accessible.
+
+---
+
+## 📊 **Example: Skincare Report Generator Implementation**
+
+### Files Edited & Why:
+
+1. **`src/index.ts`**
+   - Added `SKINCAREROUTINE_REPORT_GENERATOR_PROMPT_OAI` secret
+   - **Why**: Functions runtime needs to know about all secrets upfront
+
+2. **`src/lib/reportGenerator.ts`** 
+   - Core OpenAI integration for report generation
+   - Takes survey + skin score → returns structured report
+   - **Why**: Isolates AI logic, makes it reusable and testable
+
+3. **`src/routes/report.ts`**
+   - HTTP endpoint `/api/report/generate`
+   - Fetches survey from `skinProfiles/{uid}`
+   - Fetches latest skin score from `skinScores/{uid}/items/*`
+   - Calls `generateSkinReport()` 
+   - Stores result in `skinReports/{uid}/items/{reportId}`
+   - Materializes routine to `routines/{uid}`
+   - **Why**: Handles HTTP layer, orchestrates data flow, manages Firestore
+
+4. **`src/app.ts`**
+   - Mounted `POST /api/report/generate` endpoint
+   - **Why**: Makes endpoint accessible via HTTP
+
+---
+
+## 🎯 **Key Patterns**
+
+### **Data Flow:**
+```
+HTTP Request → Route Validation → Firestore Fetch → Library Function → OpenAI → Parse Response → Firestore Store → HTTP Response
+```
+
+### **Error Handling:**
+- Input validation at route level
+- Existence checks for required Firestore docs
+- OpenAI call failure handling
+- Structured error responses
+
+### **Firestore Patterns:**
+- User-scoped collections: `{collection}/{uid}/items/{id}`
+- Server timestamps: `FieldValue.serverTimestamp()`
+- Merge operations for updates: `{ merge: true }`
+- Query patterns: `orderBy("createdAt", "desc").limit(1)`
+
+### **OpenAI Integration:**
+- Lazy client initialization (performance)
+- Consistent prompt structure (version "1", input_text)
+- Robust markdown parsing (handles ```json blocks)
+- Fallback error handling
+
+This playbook ensures consistency, maintainability, and follows Firebase/OpenAI best practices across all features.
