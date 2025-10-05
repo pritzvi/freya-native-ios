@@ -204,16 +204,7 @@ struct OnboardingView: View {
                 )
                 
             case 11:
-                OnboardingQuestionView(
-                    questionNumber: 11,
-                    totalQuestions: coordinator.totalQuestions,
-                    title: "Ok, let's do this!",
-                    subtitle: "In order to best help with your skin, Freya needs to take a few photos to perform a facial analysis.",
-                    questionType: .singleSelect,
-                    options: ["Let's get started"],
-                    textValue: .constant(""),
-                    selectedOption: .constant("Let's get started"),
-                    selectedOptions: .constant([]),
+                DeepScanView(
                     onNext: coordinator.nextQuestion,
                     onBack: coordinator.previousQuestion
                 )
