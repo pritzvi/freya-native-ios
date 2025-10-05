@@ -21,12 +21,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 struct freyaApp: App {
     
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    @StateObject private var userSession = UserSession()
     
     var body: some Scene {
         WindowGroup {
             NavigationView {
-                StartView()
+                StartView() // Always start with splash screen
             }
+            .environmentObject(userSession)
         }
     }
 }
