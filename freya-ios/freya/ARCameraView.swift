@@ -12,25 +12,18 @@ import SceneKit
 struct ARCameraView: View {
     @Binding var capturedImage: UIImage?
     @Environment(\.presentationMode) var presentationMode
-    @State private var arView: ARSCNView?
-    
+    @StateObject private var faceController = ARFaceController()
+
     var body: some View {
         ZStack {
             // AR Face tracking view
-            ARFaceViewContainer(capturedImage: $capturedImage)
-                .onAppear {
-                    // Store reference to ARView for photo capture
-                }
-            
+            ARFaceViewContainer(capturedImage: $capturedImage, controller: faceController)
+
             VStack {
                 Spacer()
-                
-                // Capture controls
                 HStack(spacing: 40) {
                     // Cancel button
-                    Button(action: {
-                        presentationMode.wrappedValue.dismiss()
-                    }) {
+                    Button(action: { presentationMode.wrappedValue.dismiss() }) {
                         Text("Cancel")
                             .font(.system(size: 18, weight: .medium))
                             .foregroundColor(.white)
@@ -39,7 +32,7 @@ struct ARCameraView: View {
                             .background(Color.black.opacity(0.6))
                             .cornerRadius(20)
                     }
-                    
+
                     // Capture button
                     Button(action: capturePhoto) {
                         Circle()
@@ -51,7 +44,7 @@ struct ARCameraView: View {
                                     .frame(width: 60, height: 60)
                             )
                     }
-                    
+
                     // Spacer for balance
                     Button(action: {}) {
                         Text("Cancel")
@@ -68,35 +61,14 @@ struct ARCameraView: View {
         .background(Color.black)
         .navigationBarHidden(true)
     }
-    
+
     private func capturePhoto() {
-        // Get the current ARSCNView and capture a snapshot
-        if let arView = findARSCNView() {
-            let image = arView.snapshot()
-            capturedImage = image
-            presentationMode.wrappedValue.dismiss()
-        }
-    }
-    
-    private func findARSCNView() -> ARSCNView? {
-        // This is a simplified approach - in production you'd want a cleaner reference
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = windowScene.windows.first else { return nil }
-        
-        return findARSCNViewInView(window)
-    }
-    
-    private func findARSCNViewInView(_ view: UIView) -> ARSCNView? {
-        if let arView = view as? ARSCNView {
-            return arView
-        }
-        
-        for subview in view.subviews {
-            if let found = findARSCNViewInView(subview) {
-                return found
+        // Hide mesh for UX, capture pure camera pixel buffer, then show mesh again.
+        faceController.captureCleanFrame(hideOverlayDuringCapture: true, hideDelay: 0.05) { image in
+            if let image {
+                capturedImage = image
+                presentationMode.wrappedValue.dismiss()
             }
         }
-        
-        return nil
     }
 }

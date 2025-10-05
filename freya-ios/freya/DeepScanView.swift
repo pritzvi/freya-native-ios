@@ -12,25 +12,25 @@ struct DeepScanView: View {
     @State private var capturedPhotos: [UIImage?] = [nil, nil, nil, nil]
     @State private var currentPhotoIndex = 0
     @State private var showingARCamera = false
-    
+
     let onNext: () -> Void
     let onBack: () -> Void
-    
+
     private let photoInstructions = [
         "Take a front-facing photo of your face",
-        "Turn your head to the left and take a side profile", 
+        "Turn your head to the left and take a side profile",
         "Turn your head to the right and take the other side profile",
         "Tilt your head slightly up and take a photo from below"
     ]
-    
+
     private var allPhotosComplete: Bool {
         capturedPhotos.allSatisfy { $0 != nil }
     }
-    
+
     var body: some View {
         ZStack {
             Color(.systemBackground)
-            
+
             RadialGradient(
                 colors: [
                     Color(red: 0.435, green: 0.835, blue: 0.788).opacity(0.3),
@@ -43,9 +43,8 @@ struct DeepScanView: View {
             )
 
             VStack(spacing: 0) {
-                // Fixed top section
+                // Top
                 VStack(spacing: 20) {
-                    // Back button
                     HStack {
                         Button(action: onBack) {
                             Image(systemName: "chevron.left")
@@ -57,13 +56,12 @@ struct DeepScanView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 10)
-                    
-                    // Progress indicator
+
                     VStack(spacing: 8) {
                         Text("Photo \(currentPhotoIndex + 1) of 4")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                        
+
                         HStack(spacing: 8) {
                             ForEach(0..<4, id: \.self) { index in
                                 Circle()
@@ -73,14 +71,13 @@ struct DeepScanView: View {
                         }
                     }
                     .padding(.horizontal, 20)
-                    
-                    // Title and subtitle
+
                     VStack(spacing: 12) {
                         Text("Let's analyze your skin!")
                             .font(.system(size: 28, weight: .bold, design: .default))
                             .foregroundColor(.black)
                             .multilineTextAlignment(.center)
-                        
+
                         Text(photoInstructions[currentPhotoIndex])
                             .font(.system(size: 16, weight: .regular))
                             .foregroundColor(.secondary)
@@ -88,63 +85,32 @@ struct DeepScanView: View {
                     }
                     .padding(.horizontal, 20)
                 }
-                
-                // Main content area
+
+                // Main
                 VStack(spacing: 30) {
                     Spacer()
-                    
-                    // Photo grid (2x2)
+
                     VStack(spacing: 16) {
                         HStack(spacing: 16) {
-                            // Photo 1 (Front)
-                            PhotoSlot(
-                                image: capturedPhotos[0],
-                                label: "Front",
-                                isActive: currentPhotoIndex == 0,
-                                onTap: { currentPhotoIndex = 0 }
-                            )
-                            
-                            // Photo 2 (Left)
-                            PhotoSlot(
-                                image: capturedPhotos[1],
-                                label: "Left",
-                                isActive: currentPhotoIndex == 1,
-                                onTap: { currentPhotoIndex = 1 }
-                            )
+                            PhotoSlot(image: capturedPhotos[0], label: "Front", isActive: currentPhotoIndex == 0, onTap: { currentPhotoIndex = 0 })
+                            PhotoSlot(image: capturedPhotos[1], label: "Left",  isActive: currentPhotoIndex == 1, onTap: { currentPhotoIndex = 1 })
                         }
-                        
                         HStack(spacing: 16) {
-                            // Photo 3 (Right)
-                            PhotoSlot(
-                                image: capturedPhotos[2],
-                                label: "Right",
-                                isActive: currentPhotoIndex == 2,
-                                onTap: { currentPhotoIndex = 2 }
-                            )
-                            
-                            // Photo 4 (Below)
-                            PhotoSlot(
-                                image: capturedPhotos[3],
-                                label: "Below",
-                                isActive: currentPhotoIndex == 3,
-                                onTap: { currentPhotoIndex = 3 }
-                            )
+                            PhotoSlot(image: capturedPhotos[2], label: "Right", isActive: currentPhotoIndex == 2, onTap: { currentPhotoIndex = 2 })
+                            PhotoSlot(image: capturedPhotos[3], label: "Below", isActive: currentPhotoIndex == 3, onTap: { currentPhotoIndex = 3 })
                         }
                     }
-                    
-                        // Camera button
-                        Button(action: {
-                            showingARCamera = true
-                        }) {
-                            Text(capturedPhotos[currentPhotoIndex] == nil ? "Take Photo \(currentPhotoIndex + 1)/4" : "Retake Photo \(currentPhotoIndex + 1)/4")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(width: 250)
-                                .padding(.vertical, 16)
-                                .background(Color.black)
-                                .cornerRadius(25)
-                        }
-                    
+
+                    Button(action: { showingARCamera = true }) {
+                        Text(capturedPhotos[currentPhotoIndex] == nil ? "Take Photo \(currentPhotoIndex + 1)/4" : "Retake Photo \(currentPhotoIndex + 1)/4")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 250)
+                            .padding(.vertical, 16)
+                            .background(Color.black)
+                            .cornerRadius(25)
+                    }
+
                     Spacer()
                 }
                 .padding(.horizontal, 20)
@@ -174,26 +140,25 @@ struct DeepScanView: View {
                 .background(Color(.systemBackground))
             }
         }
-            .navigationBarHidden(true)
-            .sheet(isPresented: $showingARCamera) {
-                ARCameraView(capturedImage: Binding(
-                    get: { capturedPhotos[currentPhotoIndex] },
-                    set: { newImage in
-                        capturedPhotos[currentPhotoIndex] = newImage
-                        // Auto-advance to next photo if not the last one
-                        if newImage != nil && currentPhotoIndex < 3 {
-                            currentPhotoIndex += 1
-                        }
+        .navigationBarHidden(true)
+        .sheet(isPresented: $showingARCamera) {
+            ARCameraView(capturedImage: Binding(
+                get: { capturedPhotos[currentPhotoIndex] },
+                set: { newImage in
+                    capturedPhotos[currentPhotoIndex] = newImage
+                    if newImage != nil && currentPhotoIndex < 3 {
+                        currentPhotoIndex += 1
                     }
-                ))
-            }
+                }
+            ))
+        }
     }
 }
 
 struct ImagePicker: UIViewControllerRepresentable {
     @Binding var image: UIImage?
     @Environment(\.presentationMode) var presentationMode
-    
+
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.delegate = context.coordinator
@@ -201,27 +166,22 @@ struct ImagePicker: UIViewControllerRepresentable {
         picker.cameraDevice = .front
         return picker
     }
-    
+
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
     class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
         let parent: ImagePicker
-        
-        init(_ parent: ImagePicker) {
-            self.parent = parent
-        }
-        
+        init(_ parent: ImagePicker) { self.parent = parent }
+
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
             if let uiImage = info[.originalImage] as? UIImage {
                 parent.image = uiImage
             }
             parent.presentationMode.wrappedValue.dismiss()
         }
-        
+
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
             parent.presentationMode.wrappedValue.dismiss()
         }
@@ -233,7 +193,7 @@ struct PhotoSlot: View {
     let label: String
     let isActive: Bool
     let onTap: () -> Void
-    
+
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 8) {
@@ -245,10 +205,7 @@ struct PhotoSlot: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(
-                                    isActive ? Color(red: 0.435, green: 0.835, blue: 0.788) : Color.clear,
-                                    lineWidth: 3
-                                )
+                                .stroke(isActive ? Color(red: 0.435, green: 0.835, blue: 0.788) : Color.clear, lineWidth: 3)
                         )
                 } else {
                     RoundedRectangle(cornerRadius: 12)
@@ -263,13 +220,10 @@ struct PhotoSlot: View {
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(
-                                    isActive ? Color(red: 0.435, green: 0.835, blue: 0.788) : Color(.systemGray4),
-                                    lineWidth: isActive ? 3 : 1
-                                )
+                                .stroke(isActive ? Color(red: 0.435, green: 0.835, blue: 0.788) : Color(.systemGray4), lineWidth: isActive ? 3 : 1)
                         )
                 }
-                
+
                 Text(label)
                     .font(.caption)
                     .foregroundColor(isActive ? Color(red: 0.435, green: 0.835, blue: 0.788) : .secondary)
@@ -278,11 +232,4 @@ struct PhotoSlot: View {
         }
         .buttonStyle(PlainButtonStyle())
     }
-}
-
-#Preview {
-    DeepScanView(
-        onNext: {},
-        onBack: {}
-    )
 }

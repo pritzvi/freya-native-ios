@@ -1,6 +1,5 @@
-
 //
-//  ARFaceWireframeView.swift
+//  ARFaceViewContainer.swift
 //  freya
 //
 //  Created by Prithvi B on 1/4/25.
@@ -9,69 +8,104 @@
 import SwiftUI
 import ARKit
 import SceneKit
+import CoreImage
+import UIKit
+import Combine
 
 
-// Example usage:
-// struct ContentView: View {
-//     @State private var captured: UIImage? = nil
-//     var body: some View {
-//         ZStack {
-//             ARFaceViewContainer(capturedImage: $captured)
-//                 .ignoresSafeArea()
-//             if let img = captured {
-//                 Image(uiImage: img)
-//                     .resizable()
-//                     .scaledToFit()
-//                     .frame(width: 120)
-//                     .padding()
-//                     .background(.black.opacity(0.4))
-//                     .cornerRadius(12)
-//             }
-//         }
-//     }
-// }
+/// Controller that lets SwiftUI trigger overlay visibility and clean-frame capture.
+final class ARFaceController: ObservableObject {
+    fileprivate var _setVisible: ((Bool) -> Void)?
+    fileprivate var _captureClean: ((_ hideOverlay: Bool, _ hideDelay: TimeInterval, _ completion: @escaping (UIImage?) -> Void) -> Void)?
+
+    func setOverlayVisible(_ visible: Bool) {
+        _setVisible?(visible)
+    }
+
+    /// Captures a pure camera frame (no SceneKit overlays). For UX, you can hide the overlay briefly.
+    func captureCleanFrame(hideOverlayDuringCapture: Bool = true,
+                           hideDelay: TimeInterval = 0.05,
+                           completion: @escaping (UIImage?) -> Void) {
+        _captureClean?(hideOverlayDuringCapture, hideDelay, completion)
+    }
+}
 
 struct ARFaceViewContainer: UIViewRepresentable {
     @Binding var capturedImage: UIImage?
+    var controller: ARFaceController
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> ARSCNView {
         let v = ARSCNView(frame: .zero)
         v.delegate = context.coordinator
-
-        // ✅ Add a scene (robustness from code 2)
         v.scene = SCNScene()
-
-        // ✅ Match code 1's stable lighting choice
         v.automaticallyUpdatesLighting = false
 
-        // Configure AR face tracking
         guard ARFaceTrackingConfiguration.isSupported else { return v }
         let cfg = ARFaceTrackingConfiguration()
-        // Disable light estimation to keep appearance stable (like code 1)
         cfg.isLightEstimationEnabled = false
-
         v.session.run(cfg, options: [.resetTracking, .removeExistingAnchors])
+
         context.coordinator.view = v
         context.coordinator.parent = self
+
+        // Wire controller hooks
+        controller._setVisible = { [weak coord = context.coordinator] visible in
+            coord?.setOverlayVisible(visible)
+        }
+        controller._captureClean = { [weak coord = context.coordinator] hide, delay, completion in
+            coord?.captureCleanFrame(hideOverlayDuringCapture: hide, hideDelay: delay, completion: completion)
+        }
+
         return v
     }
 
     func updateUIView(_ uiView: ARSCNView, context: Context) {}
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
 
     // MARK: - Coordinator
     final class Coordinator: NSObject, ARSCNViewDelegate {
         fileprivate weak var view: ARSCNView?
         fileprivate var parent: ARFaceViewContainer?
         private var remesh: Remesher?
-        private let node = SCNNode()
+        private let overlayNode = SCNNode()  // container for lines + dots
         private var didAutoCapture = false
+        private let ciContext = CIContext(options: nil) // reuse for performance
 
+        // MARK: Overlay visibility
+        func setOverlayVisible(_ visible: Bool) {
+            overlayNode.isHidden = !visible  // Hides node + all children. (Apple docs) :contentReference[oaicite:5]{index=5}
+        }
+
+        // MARK: Capture a clean camera frame
+        func captureCleanFrame(hideOverlayDuringCapture: Bool,
+                               hideDelay: TimeInterval,
+                               completion: @escaping (UIImage?) -> Void) {
+            // UX: briefly hide overlay before capture (not required for purity, but requested)
+            if hideOverlayDuringCapture { setOverlayVisible(false) }
+
+            // Small delay so the user sees the mesh disappear before we capture
+            DispatchQueue.main.asyncAfter(deadline: .now() + hideDelay) { [weak self] in
+                guard let self, let v = self.view,
+                      let frame = v.session.currentFrame else { // Access current frame (Apple docs) :contentReference[oaicite:6]{index=6}
+                    if hideOverlayDuringCapture { self?.setOverlayVisible(true) }
+                    completion(nil)
+                    return
+                }
+
+                let pb = frame.capturedImage // Raw camera buffer (YCbCr). (Apple docs) :contentReference[oaicite:7]{index=7}
+                let uiImage = self.pixelBufferToUIImage(pb, mirrorHorizontally: true) // TrueDepth/front → mirror for selfie feel
+
+                if hideOverlayDuringCapture { self.setOverlayVisible(true) }
+                completion(uiImage)
+            }
+        }
+
+        // MARK: ARSCNViewDelegate
         func renderer(_ renderer: SCNSceneRenderer, nodeFor anchor: ARAnchor) -> SCNNode? {
-            // Draw the wireframe last so it’s visible
-            node.renderingOrder = 1000
-            return node
+            // Draw wireframe last so it’s visible
+            overlayNode.renderingOrder = 1000
+            return overlayNode
         }
 
         func renderer(_ renderer: SCNSceneRenderer, didUpdate node: SCNNode, for anchor: ARAnchor) {
@@ -87,7 +121,6 @@ struct ARFaceViewContainer: UIViewRepresentable {
                 guard let remesh else { return }
                 let g = remesh.makeGeometry(from: fa.geometry)
 
-                // Bright, always-on-top material for lines (from code 2)
                 let m = SCNMaterial()
                 m.lightingModel = .constant
                 m.emission.contents = UIColor.white
@@ -98,48 +131,72 @@ struct ARFaceViewContainer: UIViewRepresentable {
                 m.transparency = 0.88
                 g.firstMaterial = m
 
-                self.node.geometry = g
+                overlayNode.geometry = g
 
                 if let dots = remesh.makeVertexDotNode() {
-                    dots.renderingOrder = 1001  // dots over lines
-                    self.node.addChildNode(dots)
+                    dots.renderingOrder = 1001
+                    overlayNode.addChildNode(dots)
                 }
 
-                // ✅ EXTRA from code 1: capturedImage plumbing — auto-capture once
                 if !didAutoCapture {
                     didAutoCapture = true
-                    captureFrame()
+                    // No auto-capture here anymore; user explicitly taps capture.
                 }
                 return
             }
 
-            // Update vertices each frame (dot positions are also updated inside)
-            if let g = remesh?.updateGeometryVertices(geometry: node.geometry, with: fa.geometry) {
-                node.geometry = g
+            if let g = remesh?.updateGeometryVertices(geometry: overlayNode.geometry, with: fa.geometry) {
+                overlayNode.geometry = g
             }
         }
 
-        // Public helper you can call from SwiftUI via other triggers
-        func captureFrame() {
-            guard let v = view else { return }
-            // Use ARSCNView's snapshot (includes camera background composited with SceneKit content)
-            let img = v.snapshot()
-            parent?.capturedImage = img
+        // MARK: CVPixelBuffer -> UIImage
+        /// Converts ARKit camera buffer to an upright UIImage for the current interface orientation.
+        /// Front camera → mirrored variants.
+        private func pixelBufferToUIImage(_ pb: CVPixelBuffer, mirrorHorizontally: Bool) -> UIImage? {
+            var ci = CIImage(cvPixelBuffer: pb) // raw camera image (unoriented). Apple: capturedImage is raw.
+            // Get the current interface orientation from the ARSCNView's window scene.
+            let interfaceOrientation: UIInterfaceOrientation = {
+                if let io = view?.window?.windowScene?.interfaceOrientation { return io }
+                // Sensible default if unknown
+                return .portrait
+            }()
+
+            // Map UIInterfaceOrientation → CGImagePropertyOrientation (front camera = mirrored)
+            // Portrait phone + front camera typically needs .leftMirrored to be "selfie upright".
+            let cgOrient: CGImagePropertyOrientation = {
+                switch interfaceOrientation {
+                case .portrait:            return mirrorHorizontally ? .leftMirrored  : .right
+                case .portraitUpsideDown:  return mirrorHorizontally ? .rightMirrored : .left
+                case .landscapeLeft:       return mirrorHorizontally ? .downMirrored  : .up
+                case .landscapeRight:      return mirrorHorizontally ? .upMirrored    : .down
+                default:                   return mirrorHorizontally ? .leftMirrored  : .right
+                }
+            }()
+
+            // Rotate/orient the CIImage to match how the UI will display it.
+            ci = ci.oriented(cgOrient) // Core Image applies the orientation transform.
+            // Apple: CIImage.oriented(_:) rotates/flips to the given CGImagePropertyOrientation.
+            // https://developer.apple.com/documentation/coreimage/ciimage/oriented(_:)
+
+            // Render to CGImage then wrap in UIImage. UIImage orientation can be .up now.
+            let rect = ci.extent
+            guard let cg = ciContext.createCGImage(ci, from: rect) else { return nil }
+            return UIImage(cgImage: cg, scale: UIScreen.main.scale, orientation: .up)
         }
+
     }
 }
 
-// MARK: - Remesher
+// === Remesher (unchanged) ===
+
 final class Remesher {
     private(set) var keepIdx: [Int] = []
     private var keptUV: [SIMD2<Float>] = []
     private var keptPos: [SIMD3<Float>] = []
     private var edges: [(Int16, Int16)] = []
     private let addVertexDots: Bool
-
-    // billboard dots
     private var dotsNode: SCNNode?
-
     private let targetSampleCount: Int
     private let poissonRadius: Float
 
@@ -153,13 +210,9 @@ final class Remesher {
     func makeGeometry(from fg: ARFaceGeometry) -> SCNGeometry {
         keptPos = keepIdx.map { fg.vertices[$0] }
         let vSource = SCNGeometrySource(vertices: keptPos.map(SCNVector3.init))
-
-        // Safer Data construction (no deprecated init)
-        var flat: [Int16] = []
-        flat.reserveCapacity(edges.count * 2)
+        var flat: [Int16] = []; flat.reserveCapacity(edges.count * 2)
         for (a, b) in edges { flat.append(a); flat.append(b) }
         let idxData = flat.withUnsafeBytes { Data($0) }
-
         let element = SCNGeometryElement(
             data: idxData,
             primitiveType: .line,
@@ -169,7 +222,6 @@ final class Remesher {
         return SCNGeometry(sources: [vSource], elements: [element])
     }
 
-    /// ✅ EXTRA from code 1: also updates the billboard dot positions internally.
     func updateGeometryVertices(geometry: SCNGeometry?, with fg: ARFaceGeometry) -> SCNGeometry? {
         guard let geometry = geometry else { return nil }
         keptPos = keepIdx.map { fg.vertices[$0] }
@@ -178,20 +230,17 @@ final class Remesher {
         let newGeom = SCNGeometry(sources: [vSource], elements: [elem])
         newGeom.firstMaterial = geometry.firstMaterial
 
-        // Keep dots in sync automatically (like code 1)
         if let dots = dotsNode {
             updateVertexDotPositions(dotNode: dots, vertices: keptPos)
         }
         return newGeom
     }
 
-    // Optional bright nodes at vertices (billboarded quads)
     func makeVertexDotNode() -> SCNNode? {
         guard addVertexDots else { return nil }
         let parent = SCNNode()
         let dotSize: CGFloat = 0.0022
 
-        // Make dots always visible (match line material hints)
         let mat = SCNMaterial()
         mat.emission.contents = UIColor.white
         mat.diffuse.contents = UIColor.white
@@ -206,12 +255,11 @@ final class Remesher {
             plane.cornerRadius = dotSize * 0.5
             plane.firstMaterial = mat
             let n = SCNNode(geometry: plane)
-            n.constraints = [SCNBillboardConstraint()] // always faces camera
+            n.constraints = [SCNBillboardConstraint()]
             parent.addChildNode(n)
         }
         self.dotsNode = parent
 
-        // Initialize positions immediately if we already have keptPos
         if !keptPos.isEmpty {
             updateVertexDotPositions(dotNode: parent, vertices: keptPos)
         }
@@ -225,13 +273,16 @@ final class Remesher {
         }
     }
 
-    // MARK: Build stage
     private func build(from fg: ARFaceGeometry) {
         let uvs: [SIMD2<Float>] = fg.textureCoordinates.map { SIMD2<Float>($0.x, $0.y) }
 
+        func smoothstep(_ e0: Float, _ e1: Float, _ x: Float) -> Float {
+            let t = max(0, min(1, (x - e0) / max(1e-6, e1 - e0)))
+            return t * t * (3 - 2 * t)
+        }
         func foreheadMask(_ uv: SIMD2<Float>) -> Float {
             let t = smoothstep(0.78, 0.82, uv.y)
-            return clamp(t, 0, 1)
+            return max(0, min(1, t))
         }
 
         var idxForehead: [Int] = []
@@ -240,13 +291,12 @@ final class Remesher {
             if foreheadMask(uvs[i]) > 0.5 { idxForehead.append(i) } else { idxRest.append(i) }
         }
 
-        // Proportional allocation with forehead sparsity
         let n = uvs.count
         let ph = Float(idxForehead.count) / Float(max(1, n))
-        let kTotal = max(8, targetSampleCount)
+        let kTotal = max(8, 260)
 
         let kF_prop = Float(kTotal) * ph
-        let kF = max(4, Int(round(0.5 * kF_prop))) // 50% sparser on forehead
+        let kF = max(4, Int(round(0.5 * kF_prop)))
         let kR = max(8, kTotal - kF)
 
         let kF_clamped = min(kF, idxForehead.count)
@@ -260,7 +310,6 @@ final class Remesher {
         self.keepIdx = keepF + keepR
         self.keptUV  = self.keepIdx.map { uvs[$0] }
 
-        // Triangulate merged UVs → unique edges
         let tris = delaunay(points: keptUV)
         var eset = Set<Int64>(); eset.reserveCapacity(tris.count * 3)
         func key(_ a: Int, _ b: Int) -> Int64 {
@@ -285,19 +334,17 @@ final class Remesher {
 
         let pts: [SIMD2<Float>] = subset.map { uvs[$0] }
 
-        // bbox of subset
         var minU: SIMD2<Float> = SIMD2<Float>(1,1)
         var maxU: SIMD2<Float> = SIMD2<Float>(0,0)
         for p in pts { minU = min(minU, p); maxU = max(maxU, p) }
 
-        // jittered grid seeds
         let grid = Int(ceil(sqrt(Double(k))))
         var seeds: [SIMD2<Float>] = []; seeds.reserveCapacity(k)
         for gy in 0..<grid {
             for gx in 0..<grid where seeds.count < k {
                 let fx = (Float(gx) + 0.5) / Float(grid)
                 let fy = (Float(gy) + 0.5) / Float(grid)
-                let s = mix(minU, maxU, t: SIMD2<Float>(fx, fy))
+                let s = SIMD2<Float>(minU.x + (maxU.x - minU.x)*fx, minU.y + (maxU.y - minU.y)*fy)
                 seeds.append(s)
             }
         }
@@ -325,7 +372,6 @@ final class Remesher {
             }
         }
 
-        // snap to distinct originals
         var picked = Set<Int>()
         var out: [Int] = []; out.reserveCapacity(k)
         for j in 0..<k {
@@ -341,12 +387,6 @@ final class Remesher {
         return out
     }
 
-    // small utility
-    @inline(__always) private func mix(_ a: SIMD2<Float>, _ b: SIMD2<Float>, t: SIMD2<Float>) -> SIMD2<Float> {
-        return a + (b - a) * t
-    }
-
-    // Minimal Delaunay (Bowyer–Watson) over 2D points
     private struct Tri { var a:Int; var b:Int; var c:Int; var cc: SIMD3<Float> }
     private struct Edge: Hashable { let u:Int; let v:Int
         init(_ i:Int,_ j:Int){ if i<j {u=i;v=j} else {u=j;v=i} } }
@@ -397,10 +437,3 @@ final class Remesher {
         return triangles.map { ($0.a,$0.b,$0.c) }
     }
 }
-
-// MARK: - tiny helpers
-@inline(__always) private func smoothstep(_ e0: Float, _ e1: Float, _ x: Float) -> Float {
-    let t = clamp((x - e0) / max(1e-6, e1 - e0), 0, 1)
-    return t * t * (3 - 2 * t)
-}
-@inline(__always) private func clamp<T: Comparable>(_ v: T, _ a: T, _ b: T) -> T { max(a, min(b, v)) }
