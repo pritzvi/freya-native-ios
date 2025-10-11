@@ -11,16 +11,34 @@ This document captures each backend route, its purpose, Firestore paths it touch
 ---
 
 ### POST `/deepscan/score`
-**Purpose**: Run DeepScan (OpenAI Vision) on 1–4 image URLs, persist results, and return a `scoreId`.
+**Purpose**: Run DeepScan (OpenAI Vision) on 1–4 images (either direct URLs or GCS paths), persist results, and return a `scoreId`.
 
-Inputs (JSON):
+Inputs (JSON) - **Two modes supported:**
+
+**Mode 1: Direct URLs (legacy/placeholder)**
 ```json
 {
   "uid": "string",
   "images": ["https://..."],
-  "emphasis": "optional string"
+  "emphasis": "optional string (will be overridden by survey data)"
 }
 ```
+
+**Mode 2: GCS Paths (new, for private Storage)**
+```json
+{
+  "uid": "string",
+  "gcsPaths": ["userImages/uid123/items/photo-front.jpg", ...],
+  "emphasis": "optional string (will be overridden by survey data)"
+}
+```
+
+**Backend behavior:**
+- If `images` provided: uses URLs directly
+- If `gcsPaths` provided: generates short-lived signed URLs (10 min TTL) using `signedReadUrl()` from `lib/storage.ts`
+- Fetches survey data from `skinProfiles/{uid}` to build emphasis text:
+  - `emphasisText = "Primary concern: {mainConcern}. Secondary concerns: {additionalConcerns}."`
+  - Fallback if no survey: `"Primary concern: general skin health. Secondary concerns: none."`
 
 Response (JSON):
 ```json
@@ -221,6 +239,31 @@ Firestore Writes (update):
 
 ---
 
+## Firebase Storage Structure
+
+### User Images Collection
+- **Path pattern**: `userImages/{uid}/items/{fileName}`
+- **Example**: `userImages/abc123/items/deepscan-1739472000-front.jpg`
+- **Usage**: Private user photos for DeepScan
+- **Security**: Read/write restricted to authenticated user (see `storage.rules`)
+- **File naming convention**: `deepscan-{timestamp}-{angle}.jpg`
+  - Angles: `front`, `left`, `right`, `below`
+- **Access**: 
+  - iOS uploads: `Storage.storage().reference(withPath: path).putDataAsync()`
+  - Backend reads: `signedReadUrl(path, ttlMinutes)` from `lib/storage.ts`
+  - **Never use `getDownloadURL()`** - it creates long-lived public URLs
+
+### Signed URL Generation (`lib/storage.ts`)
+```typescript
+async function signedReadUrl(gsPath: string, ttlMinutes: number): Promise<string>
+```
+- Generates v4 signed URL with short TTL (typically 10 minutes)
+- Used by backend to give OpenAI temporary access to private images
+- URL expires after TTL - cannot be reused
+- Example: `https://storage.googleapis.com/freya-7c812.appspot.com/userImages/...?X-Goog-Algorithm=...`
+
+---
+
 ## Data Relationships Summary
 - One user (`uid`) has:
   - 0..N `skinScanSessions/{uid}/items/{sessionId}`
@@ -228,11 +271,19 @@ Firestore Writes (update):
   - 0..N `skinReports/{uid}/items/{reportId}`
   - 0..1 `routines/{uid}`
   - 0..1 `skinProfiles/{uid}` (survey)
+  - 0..N images in Storage: `userImages/{uid}/items/{fileName}`
 
 ## Notes for Clients (iOS)
 - Always include `uid` in POST bodies.
-- For `/api/report/generate`, `scoreId` is optional; backend will select the most recent score.
-- DeepScan can be fired-and-forgotten; the function persists results even if the client doesn’t wait.
+- For `/report/generate`, `scoreId` is optional; backend will select the most recent score.
+- DeepScan workflow:
+  1. Capture 4 photos with ARKit overlay
+  2. Upload to Storage → get `gcsPaths` array
+  3. Call `/deepscan/score` with `gcsPaths` (fire-and-forget, non-blocking)
+  4. Continue survey immediately
+  5. Backend generates signed URLs → calls OpenAI → stores results
+  6. Poll for `skinScoreResult` before showing ScoreSummaryView
+- **Never store or persist signed URLs** - they expire after TTL
 
 
 Next Steps in Our Plan:

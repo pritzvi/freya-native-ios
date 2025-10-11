@@ -37,19 +37,30 @@ struct ScoreSummaryView: View {
                 Spacer()
                 
                 // Image
-                AsyncImage(url: URL(string: placeholderImageURL)) { image in
-                    image
+                if let frontPhoto = coordinator.capturedFrontPhoto {
+                    Image(uiImage: frontPhoto)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 200, height: 200)
                         .clipShape(Circle())
                         .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 2))
-                } placeholder: {
-                    Circle()
-                        .fill(Color.gray.opacity(0.3))
-                        .frame(width: 200, height: 200)
+                        .padding(.bottom, 30)
+                } else {
+                    // Fallback to placeholder
+                    AsyncImage(url: URL(string: placeholderImageURL)) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 200, height: 200)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 2))
+                    } placeholder: {
+                        Circle()
+                            .fill(Color.gray.opacity(0.3))
+                            .frame(width: 200, height: 200)
+                    }
+                    .padding(.bottom, 30)
                 }
-                .padding(.bottom, 30)
                 
                 // Total score
                 Text("YOUR SKIN SCORE: \(coordinator.skinScoreResult?.overall ?? 0)/100")

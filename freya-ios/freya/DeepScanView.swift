@@ -191,9 +191,10 @@ struct DeepScanView: View {
                     print("✓ Uploaded: \(path)")
                 }
                 
-                // Store paths in coordinator
+                // Store paths and first photo in coordinator
                 await MainActor.run {
                     coordinator.deepScanImagePaths = paths
+                    coordinator.capturedFrontPhoto = capturedPhotos[0] // Store first photo for display
                     isUploading = false
                     
                     // Submit DeepScan in background (non-blocking)

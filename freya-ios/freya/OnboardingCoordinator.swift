@@ -18,6 +18,7 @@ class OnboardingCoordinator: ObservableObject {
     @Published var skinScoreResult: DeepScanResponse? = nil
     @Published var currentReportId: String? = nil
     @Published var deepScanImagePaths: [String] = []
+    @Published var capturedFrontPhoto: UIImage? = nil
     
     let totalQuestions = 21
     
