@@ -5,14 +5,12 @@ This document captures each backend route, its purpose, Firestore paths it touch
 ### Base
 - All routes are mounted under the Firebase Functions Express app.
 - Main API endpoints (from `freya-backend/functions/src/app.ts`).
-- Functions URL: 
-✔  Deploy complete!
-
-Project Console: https://console.firebase.google.com/project/freya-7c812/overview
+- Cloud Function URL: `https://us-central1-freya-7c812.cloudfunctions.net/api`
+- **Note:** The Cloud Function URL path `/api` is stripped before reaching Express, so Express routes should NOT have `/api` prefix.
 
 ---
 
-### POST `/api/deepscan/score`
+### POST `/deepscan/score`
 **Purpose**: Run DeepScan (OpenAI Vision) on 1–4 image URLs, persist results, and return a `scoreId`.
 
 Inputs (JSON):
@@ -64,7 +62,7 @@ Notes:
 
 ---
 
-### POST `/api/survey/save`
+### POST `/survey/save`
 **Purpose**: Save/merge user survey (onboarding) data to `skinProfiles`.
 
 Inputs (JSON):
@@ -112,7 +110,7 @@ Firestore Writes:
 
 ---
 
-### POST `/api/report/generate`
+### POST `/report/generate`
 **Purpose**: Generate a skin report using survey + skin score, store it, and materialize a routine.
 
 Inputs (JSON):
@@ -163,7 +161,7 @@ Notes:
 
 ---
 
-### POST `/api/report/find-products`
+### POST `/report/find-products`
 **Purpose**: For a generated report, run product finding per routine step in parallel and store results.
 
 Inputs (JSON):

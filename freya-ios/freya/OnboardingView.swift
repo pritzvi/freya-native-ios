@@ -384,6 +384,7 @@ struct OnboardingView: View {
                 Text("Loading...")
             }
         }
+        .environmentObject(coordinator)
         .overlay(
             // Loading overlay
             Group {
