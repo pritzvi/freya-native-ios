@@ -26,14 +26,12 @@ export interface SkinScoreResult {
   full_analysis: any;
 }
 
-export async function deepScanScore(imageUrls: string[], emphasis: any): Promise<SkinScoreResult | null> {
+export async function deepScanScore(imageUrls: string[], emphasisText: string): Promise<SkinScoreResult | null> {
   const openai = getOpenAIClient();
-
-  const emphasisText = `Primary concern: ${emphasis.primary_concern}. Secondary concerns: ${emphasis.secondary_concerns?.join(', ') || 'none'}.`;
 
   try {
     const resp = await openai.responses.create({
-      prompt: { id: skinscorePromptOai.value(), version: "1" },
+      prompt: { id: skinscorePromptOai.value(), version: "2" },
       input: [
         {
           role: "user",

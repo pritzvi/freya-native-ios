@@ -13,6 +13,7 @@
 		9A30F26D2E87880400643CCA /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 9A30F26C2E87880400643CCA /* FirebaseAppCheck */; };
 		9A30F27C2E87945400643CCA /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 9A30F27B2E87945400643CCA /* FirebaseFirestore */; };
 		9A30F27E2E87945900643CCA /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 9A30F27D2E87945900643CCA /* FirebaseAuth */; };
+		9A30F2DE2E9AB31300643CCA /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 9A30F2DD2E9AB31300643CCA /* FirebaseStorage */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,6 +37,7 @@
 				9A30F27E2E87945900643CCA /* FirebaseAuth in Frameworks */,
 				9A30F2672E87880400643CCA /* FirebaseAnalytics in Frameworks */,
 				9A30F2692E87880400643CCA /* FirebaseAnalyticsCore in Frameworks */,
+				9A30F2DE2E9AB31300643CCA /* FirebaseStorage in Frameworks */,
 				9A30F27C2E87945400643CCA /* FirebaseFirestore in Frameworks */,
 				9A30F26B2E87880400643CCA /* FirebaseAnalyticsIdentitySupport in Frameworks */,
 			);
@@ -94,6 +96,7 @@
 				9A30F26C2E87880400643CCA /* FirebaseAppCheck */,
 				9A30F27B2E87945400643CCA /* FirebaseFirestore */,
 				9A30F27D2E87945900643CCA /* FirebaseAuth */,
+				9A30F2DD2E9AB31300643CCA /* FirebaseStorage */,
 			);
 			productName = freya;
 			productReference = 9A30F24F2E87829400643CCA /* freya.app */;
@@ -410,6 +413,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 9A30F2652E87880400643CCA /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseAuth;
+		};
+		9A30F2DD2E9AB31300643CCA /* FirebaseStorage */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = FirebaseStorage;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

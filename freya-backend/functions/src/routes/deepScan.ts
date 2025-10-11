@@ -29,15 +29,34 @@ export async function deepScanScoreRoute(req: Request, res: Response) {
 
     console.log("Created session:", sessionId);
 
-    // 2. Call OpenAI Vision
-    const scoreResult = await deepScanScore(images, emphasis);
+    // 2. Build emphasis text from survey data
+    let emphasisText = "Primary concern: general skin health. Secondary concerns: none.";
+    try {
+      const profileDoc = await db.collection("skinProfiles").doc(uid).get();
+      if (profileDoc.exists) {
+        const data = profileDoc.data();
+        const mainConcern = data?.mainConcern || "general skin health";
+        const additionalConcerns = data?.additionalConcerns || [];
+        const secondaryConcerns = Array.isArray(additionalConcerns) && additionalConcerns.length > 0 
+          ? additionalConcerns.join(", ") 
+          : "none";
+        emphasisText = `Primary concern: ${mainConcern}. Secondary concerns: ${secondaryConcerns}.`;
+      }
+    } catch (error) {
+      console.log("Could not fetch survey data, using fallback emphasis");
+    }
+    
+    console.log("Using emphasis:", emphasisText);
+
+    // 3. Call OpenAI Vision
+    const scoreResult = await deepScanScore(images, emphasisText);
     if (!scoreResult) {
       return res.status(500).json({ error: "Failed to analyze images" });
     }
 
     console.log("DeepScan result:", scoreResult);
 
-    // 3. Store score
+    // 4. Store score
     await db.collection("skinScores").doc(uid).collection("items").doc(scoreId).set({
       skin_score_total_0_100: scoreResult.skin_score_total_0_100,
       subscores: scoreResult.subscores,
@@ -46,7 +65,7 @@ export async function deepScanScoreRoute(req: Request, res: Response) {
       createdAt: FieldValue.serverTimestamp()
     });
 
-    // 4. Update session
+    // 5. Update session
     await db.collection("skinScanSessions").doc(uid).collection("items").doc(sessionId).update({
       scoreId: scoreId,
       status: "succeeded"
@@ -54,7 +73,7 @@ export async function deepScanScoreRoute(req: Request, res: Response) {
 
     console.log("Saved score:", scoreId);
 
-    // 5. Return response
+    // 6. Return response
     return res.json({
       scoreId: scoreId,
       overall: scoreResult.skin_score_total_0_100,

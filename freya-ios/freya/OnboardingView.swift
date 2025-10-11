@@ -398,7 +398,7 @@ struct OnboardingView: View {
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 .scaleEffect(1.5)
                             
-                            Text("Saving your profile...")
+                            Text("Analyzing your skin...")
                                 .font(.headline)
                                 .foregroundColor(.white)
                         }

@@ -55,6 +55,36 @@ class ApiClient {
         return try JSONDecoder().decode(DeepScanResponse.self, from: data)
     }
     
+    // MARK: - Report
+    func generateReport(uid: String, scoreId: String? = nil) async throws -> ReportResponse {
+        let token = try await getAuthToken()
+        let url = URL(string: "\(baseURL)/report/generate")!
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        var body: [String: Any] = ["uid": uid]
+        if let scoreId = scoreId {
+            body["scoreId"] = scoreId
+        }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        if httpResponse.statusCode != 200 {
+            let errorMsg = String(data: data, encoding: .utf8) ?? "Unknown error"
+            throw APIError.serverError(statusCode: httpResponse.statusCode, message: errorMsg)
+        }
+        
+        return try JSONDecoder().decode(ReportResponse.self, from: data)
+    }
+    
     // MARK: - Survey
     func saveSurvey(uid: String, surveyData: [String: Any]) async throws -> SurveySaveResponse {
         let token = try await getAuthToken()
@@ -90,6 +120,11 @@ struct DeepScanResponse: Codable {
     let overall: Int
     let subscores: [String: Int]
     let confidence: Int
+}
+
+struct ReportResponse: Codable {
+    let reportId: String
+    let status: String
 }
 
 struct SurveySaveResponse: Codable {
