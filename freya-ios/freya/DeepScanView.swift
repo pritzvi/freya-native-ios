@@ -12,6 +12,7 @@ struct DeepScanView: View {
     @State private var capturedPhotos: [UIImage?] = [nil, nil, nil, nil]
     @State private var currentPhotoIndex = 0
     @State private var showingARCamera = false
+    @EnvironmentObject var coordinator: OnboardingCoordinator
 
     let onNext: () -> Void
     let onBack: () -> Void
@@ -125,7 +126,12 @@ struct DeepScanView: View {
                 )
                 .frame(height: 12)
 
-                Button(action: onNext) {
+                Button(action: {
+                    // Submit DeepScan in background (non-blocking)
+                    coordinator.submitDeepScan()
+                    // Continue to next question immediately
+                    onNext()
+                }) {
                     Text("Continue")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)

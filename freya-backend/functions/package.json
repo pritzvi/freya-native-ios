@@ -2,7 +2,9 @@
   "name": "freya-functions",
   "private": true,
   "type": "module",
-  "engines": { "node": "20" },
+  "engines": {
+    "node": "20"
+  },
   "main": "lib/index.js",
   "scripts": {
     "build": "tsc",
@@ -11,14 +13,14 @@
     "clean": "rimraf lib"
   },
   "dependencies": {
+    "@google-cloud/firestore": "^7.9.0",
     "express": "^4.19.2",
     "firebase-admin": "^12.5.0",
-    "firebase-functions": "^5.1.1",
+    "firebase-functions": "^6.5.0",
     "google-auth-library": "^9.14.1",
     "node-fetch": "^3.3.2",
     "openai": "^4.56.0",
-    "zod": "^3.23.8",
-    "@google-cloud/firestore": "^7.9.0"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",

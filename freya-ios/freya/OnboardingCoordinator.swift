@@ -7,7 +7,6 @@
 
 import SwiftUI
 import FirebaseAuth
-import FirebaseFirestore
 import Combine
 
 class OnboardingCoordinator: ObservableObject {
@@ -15,6 +14,7 @@ class OnboardingCoordinator: ObservableObject {
     @Published var onboardingData = OnboardingData()
     @Published var isLoading = false
     @Published var errorMessage = ""
+    @Published var deepScanSubmitted = false
     
     let totalQuestions = 21
     
@@ -36,6 +36,31 @@ class OnboardingCoordinator: ObservableObject {
         }
     }
     
+    // Submit DeepScan (non-blocking, fire-and-forget)
+    func submitDeepScan() {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            print("DeepScan: User not authenticated")
+            return
+        }
+        
+        // Placeholder image URL (4 times)
+        let placeholderURL = "https://plus.unsplash.com/premium_photo-1683140815244-7441fd002195?q=80&w=774&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+        let images = [placeholderURL, placeholderURL, placeholderURL, placeholderURL]
+        
+        Task {
+            do {
+                let response = try await ApiClient.shared.submitDeepScan(uid: uid, images: images, emphasis: "onboarding")
+                print("DeepScan submitted successfully. ScoreId: \(response.scoreId)")
+                DispatchQueue.main.async {
+                    self.deepScanSubmitted = true
+                }
+            } catch {
+                print("DeepScan submission failed (non-blocking): \(error.localizedDescription)")
+                // Don't show error to user - this is fire-and-forget
+            }
+        }
+    }
+    
     private func saveOnboardingData() {
         guard let uid = Auth.auth().currentUser?.uid else {
             errorMessage = "User not authenticated"
@@ -45,15 +70,15 @@ class OnboardingCoordinator: ObservableObject {
         isLoading = true
         errorMessage = ""
         
-        let db = Firestore.firestore()
-        
-        db.collection("skinProfiles").document(uid).setData(onboardingData.toDictionary()) { [weak self] error in
-            DispatchQueue.main.async {
-                self?.isLoading = false
+        Task {
+            do {
+                let surveyData = onboardingData.toDictionary()
+                let response = try await ApiClient.shared.saveSurvey(uid: uid, surveyData: surveyData)
                 
-                if let error = error {
-                    self?.errorMessage = "Failed to save data: \(error.localizedDescription)"
-                } else {
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                    print("Survey saved: \(response.message)")
+                    
                     // Mark onboarding as complete
                     UserDefaults.standard.set(true, forKey: "onboardingCompleted_\(uid)")
                     
@@ -70,6 +95,11 @@ class OnboardingCoordinator: ObservableObject {
                     
                     // Still post notification for state consistency
                     NotificationCenter.default.post(name: .onboardingCompleted, object: nil)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                    self.errorMessage = "Failed to save survey: \(error.localizedDescription)"
                 }
             }
         }
