@@ -55,6 +55,36 @@ class ApiClient {
         return try JSONDecoder().decode(DeepScanResponse.self, from: data)
     }
     
+    func submitDeepScan(uid: String, gcsPaths: [String], emphasis: String? = nil) async throws -> DeepScanResponse {
+        let token = try await getAuthToken()
+        let url = URL(string: "\(baseURL)/deepscan/score")!
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: Any] = [
+            "uid": uid,
+            "gcsPaths": gcsPaths,
+            "emphasis": emphasis ?? "onboarding"
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        if httpResponse.statusCode != 200 {
+            let errorMsg = String(data: data, encoding: .utf8) ?? "Unknown error"
+            throw APIError.serverError(statusCode: httpResponse.statusCode, message: errorMsg)
+        }
+        
+        return try JSONDecoder().decode(DeepScanResponse.self, from: data)
+    }
+    
     // MARK: - Survey
     func saveSurvey(uid: String, surveyData: [String: Any]) async throws -> SurveySaveResponse {
         let token = try await getAuthToken()

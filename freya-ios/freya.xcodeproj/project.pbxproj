@@ -13,6 +13,9 @@
 		9A30F26D2E87880400643CCA /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 9A30F26C2E87880400643CCA /* FirebaseAppCheck */; };
 		9A30F27C2E87945400643CCA /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 9A30F27B2E87945400643CCA /* FirebaseFirestore */; };
 		9A30F27E2E87945900643CCA /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 9A30F27D2E87945900643CCA /* FirebaseAuth */; };
+		9A30F2D82E9AAE5800643CCA /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 9A30F2D72E9AAE5800643CCA /* FirebaseCore */; };
+		9A30F2DA2E9AAE5800643CCA /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = 9A30F2D92E9AAE5800643CCA /* FirebaseFunctions */; };
+		9A30F2DC2E9AAE5800643CCA /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 9A30F2DB2E9AAE5800643CCA /* FirebaseStorage */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,8 +37,11 @@
 			files = (
 				9A30F26D2E87880400643CCA /* FirebaseAppCheck in Frameworks */,
 				9A30F27E2E87945900643CCA /* FirebaseAuth in Frameworks */,
+				9A30F2DC2E9AAE5800643CCA /* FirebaseStorage in Frameworks */,
 				9A30F2672E87880400643CCA /* FirebaseAnalytics in Frameworks */,
+				9A30F2DA2E9AAE5800643CCA /* FirebaseFunctions in Frameworks */,
 				9A30F2692E87880400643CCA /* FirebaseAnalyticsCore in Frameworks */,
+				9A30F2D82E9AAE5800643CCA /* FirebaseCore in Frameworks */,
 				9A30F27C2E87945400643CCA /* FirebaseFirestore in Frameworks */,
 				9A30F26B2E87880400643CCA /* FirebaseAnalyticsIdentitySupport in Frameworks */,
 			);
@@ -94,6 +100,9 @@
 				9A30F26C2E87880400643CCA /* FirebaseAppCheck */,
 				9A30F27B2E87945400643CCA /* FirebaseFirestore */,
 				9A30F27D2E87945900643CCA /* FirebaseAuth */,
+				9A30F2D72E9AAE5800643CCA /* FirebaseCore */,
+				9A30F2D92E9AAE5800643CCA /* FirebaseFunctions */,
+				9A30F2DB2E9AAE5800643CCA /* FirebaseStorage */,
 			);
 			productName = freya;
 			productReference = 9A30F24F2E87829400643CCA /* freya.app */;
@@ -410,6 +419,21 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 9A30F2652E87880400643CCA /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseAuth;
+		};
+		9A30F2D72E9AAE5800643CCA /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9A30F2652E87880400643CCA /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		9A30F2D92E9AAE5800643CCA /* FirebaseFunctions */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9A30F2652E87880400643CCA /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFunctions;
+		};
+		9A30F2DB2E9AAE5800643CCA /* FirebaseStorage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9A30F2652E87880400643CCA /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseStorage;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -33,7 +33,7 @@ export async function deepScanScore(imageUrls: string[], emphasis: any): Promise
 
   try {
     const resp = await openai.responses.create({
-      prompt: { id: skinscorePromptOai.value(), version: "1" },
+      prompt: { id: skinscorePromptOai.value(), version: "2" },
       input: [
         {
           role: "user",
