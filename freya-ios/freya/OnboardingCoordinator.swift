@@ -17,6 +17,7 @@ class OnboardingCoordinator: ObservableObject {
     @Published var deepScanSubmitted = false
     @Published var skinScoreResult: DeepScanResponse? = nil
     @Published var currentReportId: String? = nil
+    @Published var deepScanImagePaths: [String] = []
     
     let totalQuestions = 21
     
@@ -45,13 +46,14 @@ class OnboardingCoordinator: ObservableObject {
             return
         }
         
-        // Placeholder image URL (4 times)
-        let placeholderURL = "https://plus.unsplash.com/premium_photo-1683140815244-7441fd002195?q=80&w=774&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
-        let images = [placeholderURL, placeholderURL, placeholderURL, placeholderURL]
+        guard deepScanImagePaths.count == 4 else {
+            print("DeepScan: Need 4 image paths, got \(deepScanImagePaths.count)")
+            return
+        }
         
         Task {
             do {
-                let response = try await ApiClient.shared.submitDeepScan(uid: uid, images: images, emphasis: "onboarding")
+                let response = try await ApiClient.shared.submitDeepScan(uid: uid, gcsPaths: deepScanImagePaths, emphasis: "onboarding")
                 print("DeepScan submitted successfully. ScoreId: \(response.scoreId)")
                 DispatchQueue.main.async {
                     self.deepScanSubmitted = true

@@ -7,11 +7,14 @@
 
 import SwiftUI
 import ARKit
+import FirebaseAuth
+import FirebaseStorage
 
 struct DeepScanView: View {
     @State private var capturedPhotos: [UIImage?] = [nil, nil, nil, nil]
     @State private var currentPhotoIndex = 0
     @State private var showingARCamera = false
+    @State private var isUploading = false
     @EnvironmentObject var coordinator: OnboardingCoordinator
 
     let onNext: () -> Void
@@ -127,20 +130,17 @@ struct DeepScanView: View {
                 .frame(height: 12)
 
                 Button(action: {
-                    // Submit DeepScan in background (non-blocking)
-                    coordinator.submitDeepScan()
-                    // Continue to next question immediately
-                    onNext()
+                    uploadPhotosAndContinue()
                 }) {
-                    Text("Continue")
+                    Text(isUploading ? "Uploading..." : "Continue")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 18)
-                        .background(allPhotosComplete ? Color.black : Color(.systemGray4))
+                        .background(allPhotosComplete && !isUploading ? Color.black : Color(.systemGray4))
                         .cornerRadius(25)
                 }
-                .disabled(!allPhotosComplete)
+                .disabled(!allPhotosComplete || isUploading)
                 .padding(.horizontal, 20)
                 .padding(.bottom, 8)
                 .background(Color(.systemBackground))
@@ -157,6 +157,57 @@ struct DeepScanView: View {
                     }
                 }
             ))
+        }
+    }
+    
+    private func uploadPhotosAndContinue() {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            print("User not authenticated")
+            return
+        }
+        
+        isUploading = true
+        let angles = ["front", "left", "right", "below"]
+        
+        Task {
+            do {
+                var paths: [String] = []
+                
+                for (index, photo) in capturedPhotos.enumerated() {
+                    guard let image = photo else { continue }
+                    guard let jpegData = image.jpegData(compressionQuality: 0.8) else { continue }
+                    
+                    let timestamp = Int(Date().timeIntervalSince1970)
+                    let angle = angles[index]
+                    let fileName = "deepscan-\(timestamp)-\(angle).jpg"
+                    let path = "userImages/\(uid)/items/\(fileName)"
+                    
+                    let storageRef = Storage.storage().reference(withPath: path)
+                    let metadata = StorageMetadata()
+                    metadata.contentType = "image/jpeg"
+                    
+                    _ = try await storageRef.putDataAsync(jpegData, metadata: metadata)
+                    paths.append(path)
+                    print("✓ Uploaded: \(path)")
+                }
+                
+                // Store paths in coordinator
+                await MainActor.run {
+                    coordinator.deepScanImagePaths = paths
+                    isUploading = false
+                    
+                    // Submit DeepScan in background (non-blocking)
+                    coordinator.submitDeepScan()
+                    // Continue to next question immediately
+                    onNext()
+                }
+                
+            } catch {
+                print("Upload failed: \(error.localizedDescription)")
+                await MainActor.run {
+                    isUploading = false
+                }
+            }
         }
     }
 }

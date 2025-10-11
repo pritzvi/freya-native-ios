@@ -25,7 +25,7 @@ class ApiClient {
     }
     
     // MARK: - DeepScan
-    func submitDeepScan(uid: String, images: [String], emphasis: String? = nil) async throws -> DeepScanResponse {
+    func submitDeepScan(uid: String, gcsPaths: [String], emphasis: String? = nil) async throws -> DeepScanResponse {
         let token = try await getAuthToken()
         let url = URL(string: "\(baseURL)/deepscan/score")!
         
@@ -36,7 +36,7 @@ class ApiClient {
         
         let body: [String: Any] = [
             "uid": uid,
-            "images": images,
+            "gcsPaths": gcsPaths,
             "emphasis": emphasis ?? "onboarding"
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)

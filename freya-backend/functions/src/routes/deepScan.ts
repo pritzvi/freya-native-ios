@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { deepScanScore } from "../lib/deepScan.js";
+import { signedReadUrl } from "../lib/storage.js";
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -8,9 +9,24 @@ function generateId(): string {
 
 export async function deepScanScoreRoute(req: Request, res: Response) {
   try {
-    const { uid, images, emphasis } = req.body || {};
-    if (!uid || !images || !Array.isArray(images) || images.length < 1 || images.length > 4) {
-      return res.status(400).json({ error: "uid, images array (1-4 images), and emphasis required" });
+    const { uid, images, gcsPaths, emphasis } = req.body || {};
+    if (!uid) return res.status(400).json({ error: "uid required" });
+    if ((!images || !Array.isArray(images)) && (!gcsPaths || !Array.isArray(gcsPaths))) {
+      return res.status(400).json({ error: "Provide images (URLs) or gcsPaths (paths in bucket)" });
+    }
+
+    // Resolve to URLs we can hand to OpenAI Vision
+    let imageUrls: string[] = [];
+    if (Array.isArray(images) && images.length) {
+      imageUrls = images;
+    } else {
+      // Mint signed URLs for each gs path
+      imageUrls = await Promise.all(
+        gcsPaths.map((p: string) => signedReadUrl(p, 10)) // 10 minutes
+      );
+    }
+    if (imageUrls.length < 1 || imageUrls.length > 4) {
+      return res.status(400).json({ error: "Must supply 1-4 images" });
     }
 
     const db = getFirestore();
@@ -22,7 +38,7 @@ export async function deepScanScoreRoute(req: Request, res: Response) {
     // 1. Create session
     await db.collection("skinScanSessions").doc(uid).collection("items").doc(sessionId).set({
       phase: "onboarding",
-      images: images,
+      images: imageUrls,
       status: "processing",
       createdAt: FieldValue.serverTimestamp()
     });
@@ -49,7 +65,7 @@ export async function deepScanScoreRoute(req: Request, res: Response) {
     console.log("Using emphasis:", emphasisText);
 
     // 3. Call OpenAI Vision
-    const scoreResult = await deepScanScore(images, emphasisText);
+    const scoreResult = await deepScanScore(imageUrls, emphasisText);
     if (!scoreResult) {
       return res.status(500).json({ error: "Failed to analyze images" });
     }
