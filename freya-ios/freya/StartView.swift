@@ -9,6 +9,7 @@ import SwiftUI
 
 struct StartView: View {
     @State private var navigateToNext = false
+    @State private var isSkipActive = false
     @EnvironmentObject var userSession: UserSession
     
     var body: some View {
@@ -39,6 +40,24 @@ struct StartView: View {
                 
                 Spacer()
             }
+
+#if DEBUG
+            // Debug-only quick skip to Home for testing
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button(action: { isSkipActive = true }) {
+                        Text("Skip (test)")
+                            .font(.footnote)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(Color(.secondarySystemBackground)))
+                    }
+                    .padding(16)
+                }
+            }
+#endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
@@ -68,6 +87,19 @@ struct StartView: View {
                         EmptyView()
                     }
                 }
+
+#if DEBUG
+                // Direct link to Home for testing
+                NavigationLink(isActive: $isSkipActive, destination: {
+                    MainTabView(
+                        uid: "KUUE1r0AdDSehwbOLSM9E3Mhfeg2",
+                        reportId: "mgmf0xwqm7nan6atvw",
+                        scoreId: "mgmf00j3d0wbpaor0s7"
+                    )
+                }) {
+                    EmptyView()
+                }
+#endif
             }
         )
     }

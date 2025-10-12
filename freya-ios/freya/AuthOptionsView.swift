@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct AuthOptionsView: View {
+    @State private var isSkipActive = false
+    
     var body: some View {
         ZStack {
             // Background Image (full screen)
@@ -92,6 +94,18 @@ struct AuthOptionsView: View {
                             .background(Color.white.opacity(0.7))
                             .cornerRadius(30)
                     }
+                    
+#if DEBUG
+                    Button(action: { isSkipActive = true }) {
+                        Text("Skip (test)")
+                            .font(.footnote)
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.white.opacity(0.7))
+                            .cornerRadius(20)
+                    }
+#endif
                 }
                 
                 // Terms text
@@ -105,6 +119,21 @@ struct AuthOptionsView: View {
             }
         }
         .navigationBarHidden(true)
+        .background(
+            Group {
+#if DEBUG
+                NavigationLink(isActive: $isSkipActive, destination: {
+                    MainTabView(
+                        uid: "KUUE1r0AdDSehwbOLSM9E3Mhfeg2",
+                        reportId: "mgmf0xwqm7nan6atvw",
+                        scoreId: "mgmf00j3d0wbpaor0s7"
+                    )
+                }) {
+                    EmptyView()
+                }
+#endif
+            }
+        )
     }
 }
 

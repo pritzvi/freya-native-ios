@@ -28,6 +28,7 @@ struct OnboardingQuestionView: View {
     
     let onNext: () -> Void
     let onBack: () -> Void
+    @State private var isSkipActive = false
     
     var canProceed: Bool {
         switch questionType {
@@ -63,6 +64,24 @@ struct OnboardingQuestionView: View {
                         .padding(.top, 20)
                 }
             }
+
+#if DEBUG
+            // Debug-only Skip floating button
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button(action: { isSkipActive = true }) {
+                        Text("Skip (test)")
+                            .font(.footnote)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(Color(.secondarySystemBackground)))
+                    }
+                    .padding(16)
+                }
+            }
+#endif
         }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
@@ -91,6 +110,21 @@ struct OnboardingQuestionView: View {
         .navigationBarHidden(true)
         .scrollDismissesKeyboard(.interactively)
         .ignoresSafeArea(.keyboard, edges: .bottom)
+        .background(
+            Group {
+#if DEBUG
+                NavigationLink(isActive: $isSkipActive, destination: {
+                    MainTabView(
+                        uid: "KUUE1r0AdDSehwbOLSM9E3Mhfeg2",
+                        reportId: "mgmf0xwqm7nan6atvw",
+                        scoreId: "mgmf00j3d0wbpaor0s7"
+                    )
+                }) {
+                    EmptyView()
+                }
+#endif
+            }
+        )
     }
     
     private var header: some View {
