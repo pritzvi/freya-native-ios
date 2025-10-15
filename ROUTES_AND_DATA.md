@@ -227,6 +227,61 @@ Firestore Writes (update):
 
 ---
 
+### POST `/report/enrich-products`
+**Purpose**: Enrich existing product recommendations with `productId` and `imageUrl` by calling `/product/resolve` for each product.
+
+**Timing**: ~50-60s (parallel productResolve calls for all products in report)
+
+**When to call**: After `/report/find-products` completes. Can be called in background (fire-and-forget) from iOS.
+
+Inputs (JSON):
+```json
+{
+  "uid": "string",
+  "reportId": "string"
+}
+```
+
+Response (JSON):
+```json
+{
+  "success": true,
+  "enrichedProducts": {
+    "AM_step_1": {
+      "stepInfo": { "routine_step": "AM Gel Cleanser", "time_of_day": "AM", "step_number": 1 },
+      "products": [
+        {
+          "product_name": "Hada Labo Tokyo Skin Plumping Gel Cleanser",
+          "note_on_recommendation": "...",
+          "key_ingredients": ["Hyaluronic Acid", "Glycerin"],
+          "reddit_source": "...",
+          "productId": "hada-labo-tokyo-hada-labo-tokyo-skin-plumping-gel-cleanser",
+          "imageUrl": "https://us-central1-freya-7c812.cloudfunctions.net/api/products/hada-labo-tokyo-hada-labo-tokyo-skin-plumping-gel-cleanser/images/0"
+        }
+      ]
+    }
+  },
+  "totalProducts": 15,
+  "successfulResolves": 15,
+  "failedResolves": 0,
+  "status": "complete|partial"
+}
+```
+
+Firestore Reads:
+- `skinReports/{uid}/items/{reportId}` (gets existing productRecommendations)
+
+Firestore Writes (update):
+- `skinReports/{uid}/items/{reportId}`
+  - Adds `productId` and `imageUrl` to each product in `productRecommendations`
+  - Adds `enrichmentStatus: "complete"|"partial"`
+  - Adds `enrichmentCompletedAt: <serverTimestamp>`
+  - Updates `updatedAt: <serverTimestamp>`
+
+**Note**: This endpoint is idempotent - if products are already enriched, it will re-resolve them (but productResolve will hit cache for most).
+
+---
+
 ### Dev/Utility Routes (for completeness)
 - POST `/dev/indexProduct` → Index a product prototype (testing)
 - POST `/dev/knn` → KNN similarity utilities (testing)
@@ -286,28 +341,3 @@ async function signedReadUrl(gsPath: string, ttlMinutes: number): Promise<string
 - **Never store or persist signed URLs** - they expire after TTL
 
 
-Next Steps in Our Plan:
-Immediate: Test the Deployment
-Test health endpoint (from terminal):
-Expected: {"ok":true,"now":1234567890} (Done!)
-
-Next:
-Test on your iPhone:
-Build and run the iOS app on your physical device
-Complete the onboarding flow
-Check Xcode console for:
-"DeepScan submitted successfully. ScoreId: ..."
-"Survey saved: Survey saved successfully"
-Verify in Firebase Console:
-Check skinProfiles/{uid} for survey data
-Check skinScores/{uid}/items/{scoreId} for DeepScan results
-Check skinScanSessions/{uid}/items/{sessionId} for session tracking
-Next Phase: Report Generation & Products (Not Yet Implemented)
-Once Phase 1 testing passes:
-Phase 2: Add report generation API call after survey save
-Call POST /api/report/generate with { uid }
-Handle retry logic if DeepScan not ready yet
-Phase 3: Add product finding API call
-Call POST /api/report/find-products with { uid, reportId }
-Phase 4: Replace placeholder images with real photos + Firebase Storage signed URLs
-Ready to test on your phone! 

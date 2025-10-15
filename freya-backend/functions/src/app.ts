@@ -11,7 +11,7 @@ import { productResolve } from "./routes/productResolve.js";
 import { matchScore } from "./routes/matchScore.js";
 import { deepScanScoreRoute } from "./routes/deepScan.js";
 import { saveSurvey } from "./routes/survey.js";
-import { generateReport, testProductFinder, findProductsForReport } from "./routes/report.js";
+import { generateReport, testProductFinder, findProductsForReport, enrichProducts } from "./routes/report.js";
 
 if (getApps().length === 0) {
   initializeApp();
@@ -66,3 +66,4 @@ app.post("/survey/save", saveSurvey);
 app.post("/report/generate", generateReport);
 app.post("/report/test-product-finder", testProductFinder); // Test endpoint for product finder
 app.post("/report/find-products", findProductsForReport); // Main parallel product finder
+app.post("/report/enrich-products", enrichProducts); // Enrich products with images and productIds

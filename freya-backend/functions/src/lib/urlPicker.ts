@@ -26,31 +26,58 @@ export async function pickBestUrl(webResults: any[], query: string): Promise<str
     // 3) If neither Sephora nor Amazon product-specific URLs are found, return the official brand product page URL.
     // Return ONLY ONE URL that matches the highest priority available. Do NOT return multiple URLs or URLs from any other sources.
 
-    // OAI Prompt ID from secrets manager
-  const resp = await openai.responses.create({
-    prompt: { id: productUrlPickerPromptOai.value(), version: "6" },
-    input: [
-      {
-        role: "user",
-        content: [
+  // Retry up to 3 times if result is not_found, blank, or null
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      console.log(`[URL_PICKER] Attempt ${attempt}/3 for query: ${query}`);
+      
+      // OAI Prompt ID from secrets manager
+      const resp = await openai.responses.create({
+        prompt: { id: productUrlPickerPromptOai.value(), version: "8" },
+        input: [
           {
-            type: "input_text",
-            text: inputText
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: inputText
+              }
+            ]
           }
-        ]
-      }
-    ],
-    tools: [
-      {
-        "type": "web_search",
-        "user_location": { "type": "approximate" },
-        "search_context_size": "medium"
-      }
-    ]
-  } as any);
+        ],
+      } as any);
 
-  const txt = (resp as any).output_text ?? "";
-  if (!txt || /NOT_FOUND/i.test(txt)) return null;
-  const m = txt.match(/https?:\/\/\S+/i);
-  return m ? m[0] : null;
+      const txt = (resp as any).output_text ?? "";
+      console.log(`[URL_PICKER] Attempt ${attempt} response: ${txt}`);
+      
+      // Check for invalid responses
+      if (!txt || txt.trim() === "" || /NOT_FOUND/i.test(txt)) {
+        console.log(`[URL_PICKER] Attempt ${attempt} returned invalid/not_found`);
+        if (attempt === 3) {
+          console.log(`[URL_PICKER] All 3 attempts failed for: ${query}`);
+          return null;
+        }
+        continue; // Retry
+      }
+      
+      const m = txt.match(/https?:\/\/\S+/i);
+      if (m && m[0]) {
+        console.log(`[URL_PICKER] SUCCESS on attempt ${attempt}: ${m[0]}`);
+        return m[0];
+      } else {
+        console.log(`[URL_PICKER] Attempt ${attempt} no valid URL found in response`);
+        if (attempt === 3) {
+          console.log(`[URL_PICKER] All 3 attempts failed for: ${query}`);
+          return null;
+        }
+        continue; // Retry
+      }
+    } catch (error) {
+      console.error(`[URL_PICKER] Attempt ${attempt} error:`, error);
+      if (attempt === 3) return null;
+      continue; // Retry
+    }
+  }
+  
+  return null;
 }

@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { generateSkinReport } from "../lib/reportGenerator.js";
 import { findProductsForStep } from "../lib/productFinderForReport.js";
+import { productResolve } from "./productResolve.js";
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -317,6 +318,179 @@ export async function findProductsForReport(req: Request, res: Response) {
 
   } catch (error) {
     console.error("Find products for report error:", error);
+    return res.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+  }
+}
+
+export async function enrichProducts(req: Request, res: Response) {
+  try {
+    const { uid, reportId } = req.body || {};
+    if (!uid || !reportId) {
+      return res.status(400).json({ error: "uid and reportId required" });
+    }
+
+    const db = getFirestore();
+    console.log("Enriching products for user:", uid, "report:", reportId);
+
+    // 1. Fetch existing report
+    const reportDoc = await db.collection("skinReports").doc(uid).collection("items").doc(reportId).get();
+    if (!reportDoc.exists) {
+      return res.status(404).json({ error: "Report not found" });
+    }
+
+    const reportData = reportDoc.data();
+    const productRecommendations = reportData?.productRecommendations;
+    
+    if (!productRecommendations || Object.keys(productRecommendations).length === 0) {
+      return res.status(404).json({ error: "No product recommendations found. Run /report/find-products first." });
+    }
+
+    console.log(`Found ${Object.keys(productRecommendations).length} steps to enrich`);
+
+    // 2. Enrich all products with productResolve in parallel
+    const enrichmentPromises: Promise<any>[] = [];
+    const stepKeys = Object.keys(productRecommendations);
+
+    for (const stepKey of stepKeys) {
+      const stepData = productRecommendations[stepKey];
+      const products = stepData?.products || [];
+
+      for (let i = 0; i < products.length; i++) {
+        const product = products[i];
+        
+        enrichmentPromises.push(
+          (async () => {
+            const startTime = Date.now();
+            try {
+              console.log(`[ENRICH] Starting: ${product.product_name} (${stepKey}) index=${i}`);
+              const enrichedUrl = Array.isArray(product?.product_urls) && product.product_urls.length > 0 ? product.product_urls[0] : undefined;
+              console.log(`[ENRICH] CALL productResolve query="${product.product_name}" url="${enrichedUrl || '<none>'}" step=${stepKey}[${i}]`);
+              
+              // Call productResolve with proper Promise wrapper
+              const reqBody: any = { query: product.product_name };
+              if (enrichedUrl) {
+                reqBody.url = enrichedUrl;
+              }
+              const mockReq = { body: reqBody } as Request;
+              
+              const resolveResult = await new Promise<any>((resolve, reject) => {
+                let responded = false;
+                const timeout = setTimeout(() => {
+                  console.error(`[ENRICH] TIMEOUT: no response from productResolve within 60s for ${product.product_name} step=${stepKey}[${i}], responded=${responded}`);
+                  reject(new Error(`Timeout after 60s for ${product.product_name}`));
+                }, 60000); // 60s timeout per product
+
+                const mockRes = {
+                  json: (data: any) => {
+                    responded = true;
+                    clearTimeout(timeout);
+                    console.log(`[ENRICH] productResolve returned for ${product.product_name}:`, JSON.stringify(data));
+                    resolve(data);
+                    return mockRes;
+                  },
+                  status: (code: number) => {
+                    console.log(`[ENRICH] productResolve status ${code} for ${product.product_name}`);
+                    return mockRes;
+                  }
+                } as any;
+
+                productResolve(mockReq, mockRes).catch((err) => {
+                  clearTimeout(timeout);
+                  console.error(`[ENRICH] productResolve threw for ${product.product_name} step=${stepKey}[${i}]:`, err);
+                  reject(err);
+                });
+              });
+              
+              const resolveTime = Date.now() - startTime;
+              console.log(`[ENRICH] productResolve completed in ${resolveTime}ms for ${product.product_name}`);
+              
+              if (resolveResult?.productId) {
+                console.log(`[ENRICH] Fetching product doc: ${resolveResult.productId}`);
+                
+                // Fetch product from Firestore to get image URL
+                const productDoc = await db.collection("products").doc(resolveResult.productId).get();
+                const productData = productDoc.data();
+                const imageUrl = productData?.images?.[0] || null;
+                
+                const totalTime = Date.now() - startTime;
+                console.log(`[ENRICH] SUCCESS for ${product.product_name}: productId=${resolveResult.productId}, imageUrl=${imageUrl ? imageUrl.substring(0, 50) + '...' : 'NULL'}, totalTime=${totalTime}ms`);
+                
+                return {
+                  stepKey,
+                  productIndex: i,
+                  productId: resolveResult.productId,
+                  imageUrl: imageUrl,
+                  success: true
+                };
+              } else {
+                const totalTime = Date.now() - startTime;
+                console.error(`[ENRICH] FAILED (no productId) for ${product.product_name}, status=${resolveResult?.status}, reason=${resolveResult?.reason}, totalTime=${totalTime}ms`);
+                return { stepKey, productIndex: i, success: false, error: `Product resolve returned: ${JSON.stringify(resolveResult)}` };
+              }
+            } catch (error) {
+              const totalTime = Date.now() - startTime;
+              console.error(`[ENRICH] EXCEPTION for ${product.product_name} after ${totalTime}ms:`, error);
+              return { stepKey, productIndex: i, success: false, error: error instanceof Error ? error.message : "Unknown error" };
+            }
+          })()
+        );
+      }
+    }
+
+    console.log(`Running ${enrichmentPromises.length} product resolves in parallel...`);
+    const results = await Promise.all(enrichmentPromises);
+
+    // 3. Build enriched product recommendations
+    const enrichedProducts: any = JSON.parse(JSON.stringify(productRecommendations)); // Deep clone
+    let successCount = 0;
+    let failCount = 0;
+
+    let successWithImages = 0;
+    let successWithoutImages = 0;
+    
+    results.forEach((result) => {
+      if (result.success) {
+        const products = enrichedProducts[result.stepKey]?.products;
+        if (products && products[result.productIndex]) {
+          products[result.productIndex].productId = result.productId;
+          products[result.productIndex].imageUrl = result.imageUrl;
+          
+          if (result.imageUrl) {
+            successWithImages++;
+          } else {
+            successWithoutImages++;
+            console.log(`[ENRICH] Product resolved but NO IMAGE: ${products[result.productIndex].product_name}, productId=${result.productId}`);
+          }
+          successCount++;
+        }
+      } else {
+        failCount++;
+        console.log(`[ENRICH] Product FAILED: ${result.stepKey}[${result.productIndex}], error=${result.error}`);
+      }
+    });
+
+    console.log(`[ENRICH] Enrichment complete: ${successCount} successful (${successWithImages} with images, ${successWithoutImages} without images), ${failCount} failed`);
+
+    // 4. Update Firestore with enriched products
+    await db.collection("skinReports").doc(uid).collection("items").doc(reportId).update({
+      productRecommendations: enrichedProducts,
+      enrichmentStatus: failCount === 0 ? "complete" : "partial",
+      enrichmentCompletedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    });
+
+    // 5. Return response
+    return res.json({
+      success: true,
+      enrichedProducts: enrichedProducts,
+      totalProducts: enrichmentPromises.length,
+      successfulResolves: successCount,
+      failedResolves: failCount,
+      status: failCount === 0 ? "complete" : "partial"
+    });
+
+  } catch (error) {
+    console.error("Enrich products error:", error);
     return res.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
   }
 }
